@@ -1,0 +1,16 @@
+--- cdtext.c.org
++++ cdtext.c
+@@ -149,6 +149,13 @@
+ 		return (FALSE);
+ 	}
+ 	j = fs % sizeof (struct textpack);
++	// Begin chrdev patch
++	//     To accept files either with or without NUL-terminator
++	if (j == 1) {
++		j = 0;
++		--fs;
++	}
++	// End chrdev patch
+ 	if (j == 4) {
+ 		n = fileread(f, hbuf, 4);
+ 		if (n != 4) {

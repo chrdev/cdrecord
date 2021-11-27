@@ -1,0 +1,13 @@
+--- scsitransp.c.org	2009-09-07 21:09:48.000000000 +0200
++++ scsitransp.c	2013-05-01 12:34:26.078125000 +0200
+@@ -56,8 +56,8 @@
+  *	Choose your name instead of "schily" and make clear that the version
+  *	string is related to a modified source.
+  */
+-LOCAL	char	_scg_version[]		= "0.9";	/* The global libscg version	*/
+-LOCAL	char	_scg_auth_schily[]	= "schily";	/* The author for this module	*/
++LOCAL	char	_scg_version[]		= "0.9a";	/* The global libscg version	*/
++LOCAL	char	_scg_auth_schily[]	= "cdrtfe";	/* The author for this module	*/
+ 
+ #define	DEFTIMEOUT	20	/* Default timeout for SCSI command transport */
+ 

@@ -1,0 +1,119 @@
+--- scsi-wnt.c.org	2014-02-27 23:32:04.138968200 +0100
++++ scsi-wnt.c	2014-02-27 23:32:28.403859400 +0100
+@@ -139,6 +139,7 @@
+ 
+ #define	PREFER_SPTI	1		/* Prefer SPTI if available, else try ASPI, force ASPI with dev=ASPI: */
+ /* #define	CREATE_NONSHARED 1 */	/* open CDROM-Device not SHARED if possible */
++/* #define	CDROM_ONLY 1 */
+ /* #define	_DEBUG_SCSIPT 1   */
+ #ifdef _DEBUG_SCSIPT
+ FILE *scgp_errfile; /* File for SPTI-Debug-Messages */
+@@ -495,6 +496,9 @@
+ 	ULONG		length;
+ 	ULONG		returned;
+ 	BYTE		inqData[NTSCSI_HA_INQUIRY_SIZE];
++	STORAGE_PROPERTY_QUERY SPQuery;
++	STORAGE_DEVICE_DESCRIPTOR SDD;
++	STORAGE_BUS_TYPE BusType;
+ 
+ #ifdef _DEBUG_SCSIPT
+ 	js_fprintf(scgp_errfile, "SPTI: Checking drive %c:", 'A'+i);
+@@ -551,30 +555,31 @@
+ 	memcpy(pDrive->inqData, inqData, NTSCSI_HA_INQUIRY_SIZE);
+ 
+ 	/*
+-	 * get the address (path/tgt/lun) of the drive via IOCTL_SCSI_GET_ADDRESS
++	 * get bus type of drive
+ 	 */
+-	memset(&scsiAddr, 0, sizeof (SCSI_ADDRESS));
+-	scsiAddr.Length = sizeof (SCSI_ADDRESS);
+-	if (DeviceIoControl(fh, IOCTL_SCSI_GET_ADDRESS, NULL, 0,
+-			&scsiAddr, sizeof (SCSI_ADDRESS), &returned,
++	memset(&SPQuery, 0, sizeof (SPQuery));
++	memset(&SDD, 0, sizeof (SDD));
++	SPQuery.PropertyId = StorageDeviceProperty;
++	SPQuery.QueryType = PropertyStandardQuery;
++	if (DeviceIoControl(fh, IOCTL_STORAGE_QUERY_PROPERTY, &SPQuery, sizeof(STORAGE_PROPERTY_QUERY),
++			&SDD, sizeof (SDD), &returned,
+ 			NULL)) {
++		BusType = SDD.BusType;
+ #ifdef _DEBUG_SCSIPT
+-		js_fprintf(scgp_errfile, "Device %c: Port=%d, PathId=%d, TargetId=%d, Lun=%d\n",
+-			(char)i+'A', scsiAddr.PortNumber, scsiAddr.PathId,
+-			scsiAddr.TargetId, scsiAddr.Lun);
+-#endif
+-		pDrive->bUsed		= TRUE;
+-		pDrive->ha		= scsiAddr.PortNumber; /* preliminary */
+-		pDrive->PortNumber	= scsiAddr.PortNumber;
+-		pDrive->PathId		= scsiAddr.PathId;
+-		pDrive->tgt		= scsiAddr.TargetId;
+-		pDrive->lun		= scsiAddr.Lun;
+-		pDrive->driveLetter	= i;
+-		pDrive->hDevice		= INVALID_HANDLE_VALUE;
++		js_fprintf(scgp_errfile, "Device %c: BusType=%d\n", (char)i+'A', BusType);
++#endif
++	} else {
++		BusType = BusTypeUnknown;
++	}
+ 
+-	} else if (GetLastError() == 50) {
++	if ((BusType == BusType1394) || (BusType == BusTypeUsb)) {
++#ifdef _DEBUG_SCSIPT
++		js_fprintf(scgp_errfile, "BusType=%d -> USB or FireWire drive\n", BusType);
++#endif
+ 		/*
+-		 * support USB/FIREWIRE devices where this call is not supported
++		 * support USB/FIREWIRE devices
++		 * on Windows versions older than Windows 8 DeviceIOControl with IOCTL_SCSI_GET_ADDRESS
++		 * is not supported, on Windows 8 this always returns 0 for PortNumber, Target and Lun
+ 		 * assign drive letter as device ID
+ 		 */
+ 		pDrive->bUsed = TRUE;
+@@ -585,16 +590,41 @@
+ 		pDrive->lun = 0;
+ 		pDrive->driveLetter = i;
+ 		pDrive->hDevice = INVALID_HANDLE_VALUE;
++
++	} else {
+ #ifdef _DEBUG_SCSIPT
+-		js_fprintf(scgp_errfile, "USB/Firewire Device %c: Port=%d, TargetId=%d, Lun=%d\n", (char)i+'A', i, 0, 0);
++		js_fprintf(scgp_errfile, "BusType=%d -> not USB or FireWire drive\n", BusType);
+ #endif
+-	} else {
+-		pDrive->bUsed	= FALSE;
++		/*
++		 * get the address (path/tgt/lun) of the drive via IOCTL_SCSI_GET_ADDRESS
++		 */
++		memset(&scsiAddr, 0, sizeof (SCSI_ADDRESS));
++		scsiAddr.Length = sizeof (SCSI_ADDRESS);
++		if (DeviceIoControl(fh, IOCTL_SCSI_GET_ADDRESS, NULL, 0,
++				&scsiAddr, sizeof (SCSI_ADDRESS), &returned,
++				NULL)) {
++#ifdef _DEBUG_SCSIPT
++			js_fprintf(scgp_errfile, "Device %c: Port=%d, PathId=%d, TargetId=%d, Lun=%d\n",
++				(char)i+'A', scsiAddr.PortNumber, scsiAddr.PathId,
++				scsiAddr.TargetId, scsiAddr.Lun);
++#endif
++			pDrive->bUsed		= TRUE;
++			pDrive->ha		= scsiAddr.PortNumber; /* preliminary */
++			pDrive->PortNumber	= scsiAddr.PortNumber;
++			pDrive->PathId		= scsiAddr.PathId;
++			pDrive->tgt		= scsiAddr.TargetId;
++			pDrive->lun		= scsiAddr.Lun;
++			pDrive->driveLetter	= i;
++			pDrive->hDevice		= INVALID_HANDLE_VALUE;
++
++		} else {
++			pDrive->bUsed	= FALSE;
+ #ifdef _DEBUG_SCSIPT
+-		js_fprintf(scgp_errfile, "SPTI: Device %s: Error DeviceIoControl(): %d\n", (char)i+'A', GetLastError());
++			js_fprintf(scgp_errfile, "SPTI: Device %s: Error DeviceIoControl(): %d\n", (char)i+'A', GetLastError());
+ #endif
+-		CloseHandle(fh);
+-		return;
++			CloseHandle(fh);
++			return;
++		}
+ 	}
+ #ifdef _DEBUG_SCSIPT
+ 	js_fprintf(scgp_errfile,  "SPTI: Adding drive %c: (%d:%d:%d)\n", 'A'+i,

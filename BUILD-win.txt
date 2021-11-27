@@ -1,0 +1,53 @@
+# Instructions on building cdrecord for Windows
+
+Install cygwin with key devel tools:
+    gcc mingw make patch
+
+## Preparation
+
+Download schily-2021-09-18.tar.bz2.
+Extract to your cygwin home directory as tar.
+Launch Cygwin.bat
+
+    tar x -f schily-2021-09-18.tar
+
+Apply patches, commands example:
+
+    chmod 664 fn.c
+    patch fn.c fn.c.diff
+
+## Issue Commands Step By Step
+
+    cd schily-2021-09-18/psmake
+    CC=gcc CFLAGS=-O3 LDFLAGS="-static -s" ./MAKE-sh
+
+    cd ../libschily
+    ../psmake/smake
+
+    cd ../libdeflt
+    ../psmake/smake
+
+    cd ../libcdrdeflt
+    ../psmake/smake
+
+    cd ../libedc
+    ../psmake/smake
+
+    cd ../libscg
+    ../psmake/smake
+
+    cd ../librscg
+    ../psmake/smake
+
+    cd ../libscgcmd
+    ../psmake/smake
+
+    cd ../cdrecord
+    ../psmake/smake
+
+If everything goes smoothly, find cdrecord.exe under
+    cdrecord/OBJ/*/
+
+And optionally,
+
+    strip -s cdrecord.exe

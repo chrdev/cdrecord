@@ -1,0 +1,63 @@
+--- cue.c.org
++++ cue.c
+@@ -23,6 +23,12 @@
+  * file and include the License file CDDL.Schily.txt from this distribution.
+  */
+ 
++// Begin chrdev patch
++//     To read UTF-8 files
++#include <stdint.h>
++#include <locale.h>
++// End chrdev patch
++
+ #include <schily/mconfig.h>
+ #include <schily/stdio.h>
+ #include <schily/stdlib.h>
+@@ -1415,16 +1421,47 @@
+ }
+ #endif
+ 
++// Begin chrdev patch
++//     To read UTF-8 files
++static inline char
++has_utf8bom(const char* name) {
++	static const char bom[4] = { 0xEF, 0xBB, 0xBF };
++
++	FILE* f = fopen(name, "rb");
++	if (!f) return 0;
++
++	char header[4] = { 0 };
++	char* got = fgets(header, sizeof(bom), f);
++	fclose(f);
++	if (!got) return 0;
++	return *(const uint32_t*)(bom) == *(const uint32_t*)(header);
++}
++// End chrdev patch
++
+ LOCAL FILE *
+ cueopen(name)
+ 	char	*name;
+ {
+ 	FILE	*f;
+ 
++	// Begin chrdev patch
++	//    To read UTF-8 files
++	char is_utf8 = has_utf8bom(name);
++	if (is_utf8) setlocale(LC_ALL, ".utf8");
++	// End chrdev patch
++
+ 	f = fileopen(name, "r");
+ 	if (f == NULL)
+ 		comerr(_("Cannot open '%s'.\n"), name);
+ 
++	// Begin chrdev patch
++	//    To read UTF-8 files
++	if (f && is_utf8) {
++		char dummy[4];
++		fgets(dummy, 4, f);
++	}
++	// End chrdev patch
++
+ 	fname = name;
+ 	return (f);
+ }
